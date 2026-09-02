@@ -1,0 +1,16 @@
+{
+  "name": "phoenix-golf-locker-glms",
+  "version": "1.0.0",
+  "description": "Realtime Golf Locker Monitoring System for Phoenix Golf Resort",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "init-db": "node init_db.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5",
+    "sqlite3": "^5.1.7"
+  }
+}
