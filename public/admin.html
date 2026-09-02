@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IT Admin - Quản Trị Hệ Thống Locker GLMS</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+</head>
+<body class="bg-light p-3">
+  <div class="container-fluid">
+    
+    <div class="d-flex justify-content-between align-items-center mb-3 bg-white p-3 rounded shadow-sm">
+      <div class="d-flex align-items-center gap-3">
+        <a href="index.html" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Menu</a>
+        <h4 class="mb-0 text-dark fw-bold"><i class="bi bi-shield-lock-fill text-warning"></i> IT HELPDESK & QUẢN TRỊ HỆ THỐNG</h4>
+      </div>
+      <div>
+        <button class="btn btn-primary btn-sm" onclick="openRemapModal()"><i class="bi bi-link-45deg"></i> Ghép Nối Mã QR Mới</button>
+        <button class="btn btn-outline-success btn-sm" onclick="exportDataCSV()"><i class="bi bi-file-earmark-spreadsheet"></i> Xuất CSV</button>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <ul class="nav nav-tabs mb-3" id="adminTabs">
+      <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-lockers">Danh Mục 603 Tủ</a></li>
+      <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-logs">Lịch Sử Audit Trail (Logs)</a></li>
+    </ul>
+
+    <div class="tab-content">
+      <!-- TAB LOCKERS -->
+      <div class="tab-pane fade show active" id="tab-lockers">
+        <div class="card shadow-sm border-0">
+          <div class="card-body p-3">
+            <div class="row g-2 mb-3">
+              <div class="col-md-3">
+                <input type="text" id="adminSearch" class="form-control form-control-sm" placeholder="Tìm số tủ, ID, token..." oninput="filterAdminTable()">
+              </div>
+              <div class="col-md-2">
+                <select id="adminZoneFilter" class="form-select form-select-sm" onchange="filterAdminTable()">
+                  <option value="ALL">Tất cả Khu Vực</option>
+                  <option value="MEN">Khu Nam (497)</option>
+                  <option value="WOMEN">Khu Nữ (106)</option>
+                </select>
+              </div>
+              <div class="col-md-2">
+                <select id="adminTierFilter" class="form-select form-select-sm" onchange="filterAdminTable()">
+                  <option value="ALL">Tất cả Hạng Tủ</option>
+                  <option value="VIP">Hạng VIP (244)</option>
+                  <option value="MEMBER_GUEST">Hạng Member & Guest (359)</option>
+                </select>
+              </div>
+              <div class="col-md-2">
+                <select id="adminStatusFilter" class="form-select form-select-sm" onchange="filterAdminTable()">
+                  <option value="ALL">Tất cả Trạng Thái</option>
+                  <option value="INSPECTED">INSPECTED</option>
+                  <option value="IN_USE">IN_USE</option>
+                  <option value="DIRTY">DIRTY</option>
+                  <option value="RESERVED">RESERVED</option>
+                  <option value="OOO">OOO (Bảo trì)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="table-responsive" style="max-height: 600px;">
+              <table class="table table-sm table-bordered table-hover align-middle small">
+                <thead class="table-dark sticky-top">
+                  <tr>
+                    <th>Locker ID</th>
+                    <th>Số Tủ</th>
+                    <th>Khu Vực</th>
+                    <th>Hạng</th>
+                    <th>Trạng Thái</th>
+                    <th>Mã Băm QR Token</th>
+                    <th>Khách Dùng</th>
+                    <th>Cập Nhật Cuối</th>
+                    <th>Thao Tác</th>
+                  </tr>
+                </thead>
+                <tbody id="adminTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB LOGS -->
+      <div class="tab-pane fade" id="tab-logs">
+        <div class="card shadow-sm border-0">
+          <div class="card-body p-3">
+            <h6 class="fw-bold mb-3"><i class="bi bi-clock-history"></i> LỊCH SỬ THAY ĐỔI TRẠNG THÁI (AUDIT TRAIL LOGS)</h6>
+            <div class="table-responsive" style="max-height: 600px;">
+              <table class="table table-sm table-striped table-bordered align-middle small">
+                <thead class="table-secondary sticky-top">
+                  <tr>
+                    <th>#Log ID</th>
+                    <th>Thời Gian</th>
+                    <th>Mã Tủ</th>
+                    <th>Hành Động</th>
+                    <th>Trạng Thái Cũ -> Mới</th>
+                    <th>Người Thực Hiện</th>
+                    <th>Ghi Chú</th>
+                  </tr>
+                </thead>
+                <tbody id="logsTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MODAL GHÉP NỐI TEM QR -->
+  <div class="modal fade" id="remapModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title fw-bold"><i class="bi bi-qr-code"></i> KHẮC PHỤC LỆCH TEM - GHÉP NỐI QR MỚI</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="small text-muted">Sử dụng khi tem dán trên cánh tủ thực tế bị lệch so với phần mềm hoặc thay cánh tủ mới.</p>
+          <div class="mb-3">
+            <label class="form-label small fw-bold">Chọn Mã Tủ Cần Gán Lại:</label>
+            <input type="text" id="remapTargetId" class="form-control" placeholder="VD: M-VIP-015">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-bold">Mã QR Token Đang Dán Trên Cánh Tủ:</label>
+            <input type="text" id="remapNewToken" class="form-control" placeholder="Quét hoặc dán chuỗi token vào đây...">
+          </div>
+          <button class="btn btn-success w-100 fw-bold" onclick="submitRemap()">
+            <i class="bi bi-check-lg"></i> Xác Nhận Ghép Nối Ngay
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    let lockers = [];
+    let logs = [];
+
+    async function loadAdminData() {
+      const res1 = await fetch('/api/lockers');
+      lockers = await res1.json();
+      renderAdminTable(lockers);
+
+      const res2 = await fetch('/api/logs');
+      logs = await res2.json();
+      renderLogsTable(logs);
+    }
+
+    function renderAdminTable(data) {
+      const tbody = document.getElementById('adminTableBody');
+      tbody.innerHTML = '';
+
+      data.forEach(l => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="fw-bold">${l.locker_id}</td>
+          <td><span class="badge ${l.tier_id === 'VIP' ? 'bg-warning text-dark' : 'bg-secondary'}">${l.locker_number}</span></td>
+          <td>${l.zone_id === 'MEN' ? 'Nam' : 'Nữ'}</td>
+          <td>${l.tier_id}</td>
+          <td><span class="badge status-${l.current_status} p-1" style="background:${getStatusColor(l.current_status)}">${l.current_status}</span></td>
+          <td class="font-monospace text-muted small">${l.qr_token}</td>
+          <td>${l.guest_name || '-'}</td>
+          <td class="small text-muted">${new Date(l.last_changed).toLocaleString()}</td>
+          <td>
+            <button class="btn btn-outline-danger btn-sm py-0" onclick="setOOO('${l.locker_id}')">Bảo trì</button>
+            <button class="btn btn-outline-success btn-sm py-0" onclick="resetInspected('${l.locker_id}')">Sẵn sàng</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function getStatusColor(s) {
+      if (s === 'INSPECTED') return '#198754';
+      if (s === 'IN_USE') return '#dc3545';
+      if (s === 'DIRTY') return '#ffc107; color: #000';
+      if (s === 'RESERVED') return '#6f42c1';
+      return '#6c757d';
+    }
+
+    function filterAdminTable() {
+      const q = document.getElementById('adminSearch').value.toLowerCase().trim();
+      const z = document.getElementById('adminZoneFilter').value;
+      const t = document.getElementById('adminTierFilter').value;
+      const s = document.getElementById('adminStatusFilter').value;
+
+      let filtered = lockers.filter(l => {
+        const matchQ = !q || l.locker_id.toLowerCase().includes(q) || l.locker_number.includes(q) || l.qr_token.toLowerCase().includes(q);
+        const matchZ = z === 'ALL' || l.zone_id === z;
+        const matchT = t === 'ALL' || l.tier_id === t;
+        const matchS = s === 'ALL' || l.current_status === s;
+        return matchQ && matchZ && matchT && matchS;
+      });
+      renderAdminTable(filtered);
+    }
+
+    function renderLogsTable(data) {
+      const tbody = document.getElementById('logsTableBody');
+      tbody.innerHTML = '';
+      data.slice().reverse().forEach(log => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${log.log_id}</td>
+          <td>${new Date(log.timestamp).toLocaleString()}</td>
+          <td class="fw-bold">${log.locker_id}</td>
+          <td><span class="badge bg-dark">${log.action}</span></td>
+          <td>${log.old_status || '-'} ➔ <strong>${log.new_status}</strong></td>
+          <td>${log.user}</td>
+          <td>${log.note || ''}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function setOOO(id) {
+      if (confirm(`Chuyển tủ ${id} sang trạng thái Hỏng / Bảo trì (OOO)?`)) {
+        await fetch('/api/lockers/update-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ locker_id: id, new_status: 'OOO', note: 'Báo hỏng bởi IT Admin', user: 'IT_Admin' })
+        });
+        loadAdminData();
+      }
+    }
+
+    async function resetInspected(id) {
+      await fetch('/api/lockers/update-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ locker_id: id, new_status: 'INSPECTED', user: 'IT_Admin' })
+      });
+      loadAdminData();
+    }
+
+    function openRemapModal() {
+      new bootstrap.Modal(document.getElementById('remapModal')).show();
+    }
+
+    async function submitRemap() {
+      const tid = document.getElementById('remapTargetId').value.trim();
+      const ntoken = document.getElementById('remapNewToken').value.trim();
+      if (!tid || !ntoken) return alert('Vui lòng nhập đầy đủ thông tin!');
+
+      const res = await fetch('/api/admin/remap-qr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_locker_id: tid, new_qr_token: ntoken, user: 'IT_Admin' })
+      });
+      const d = await res.json();
+      alert(d.message);
+      bootstrap.Modal.getInstance(document.getElementById('remapModal')).hide();
+      loadAdminData();
+    }
+
+    function exportDataCSV() {
+      let csv = "Locker_ID,Number,Zone,Tier,Status,QR_Token,Guest_Name\n";
+      lockers.forEach(l => {
+        csv += `"${l.locker_id}","${l.locker_number}","${l.zone_id}","${l.tier_id}","${l.current_status}","${l.qr_token}","${l.guest_name || ''}"\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `GLMS_Locker_Data_${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+    }
+
+    loadAdminData();
+  </script>
+</body>
+</html>

@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Housekeeping - Quét QR Dọn Tủ</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    body { background-color: #121212; color: #fff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    .scanner-box { border: 2px solid #28a745; border-radius: 16px; overflow: hidden; background: #000; }
+    .offline-badge { position: fixed; top: 10px; right: 10px; z-index: 100; font-size: 11px; }
+  </style>
+</head>
+<body class="p-3 pb-5">
+  
+  <div id="offlineIndicator" class="badge bg-danger offline-badge d-none">
+    <i class="bi bi-wifi-off"></i> MẤT MẠNG - ĐANG LƯU HÀNG ĐỢI
+  </div>
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <a href="index.html" class="btn btn-outline-light btn-sm"><i class="bi bi-arrow-left"></i> Menu</a>
+    <h5 class="mb-0 text-success fw-bold"><i class="bi bi-qr-code-scan"></i> BUỒNG PHÒNG - DỌN TỦ</h5>
+    <button class="btn btn-warning btn-sm fw-bold text-dark" onclick="openLostFoundModal()">
+      <i class="bi bi-exclamation-triangle-fill"></i> Báo Đồ Quên
+    </button>
+  </div>
+
+  <!-- Hướng dẫn nhanh -->
+  <div class="alert alert-dark border-secondary p-2 mb-3 small text-center">
+    <span>💡 <strong>Quy trình:</strong> Dọn tủ -> Reset mã cơ về <strong>0000</strong> -> Quét mã QR</span>
+  </div>
+
+  <!-- Camera Box -->
+  <div class="scanner-box mb-3 shadow">
+    <div id="reader" style="width: 100%; min-height: 280px;"></div>
+  </div>
+
+  <!-- Kết quả quét -->
+  <div id="scanResult" class="alert alert-secondary text-center py-2 d-none">
+    <span id="scanResultText">Sẵn sàng quét mã QR...</span>
+  </div>
+
+  <!-- Dọn theo danh sách / Lọc nhanh -->
+  <div class="card bg-dark border-secondary text-white mt-3">
+    <div class="card-header border-secondary d-flex justify-content-between align-items-center py-2">
+      <span class="fw-bold small"><i class="bi bi-list-check"></i> DANH SÁCH TỦ CHỜ DỌN (DIRTY)</span>
+      <button class="btn btn-sm btn-outline-success py-0" onclick="loadDirtyLockers()"><i class="bi bi-arrow-clockwise"></i> Làm mới</button>
+    </div>
+    <div class="card-body p-2">
+      <div id="dirtyLockerList" class="d-flex flex-wrap gap-2 justify-content-center">
+        <small class="text-white-50">Đang tải danh sách tủ chờ dọn...</small>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL BÁO ĐỒ BỎ QUÊN -->
+  <div class="modal fade" id="hkLostFoundModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content bg-dark text-white border-warning">
+        <div class="modal-header border-secondary">
+          <h5 class="modal-title text-warning fw-bold"><i class="bi bi-bell-fill"></i> BÁO CÁO ĐỒ BỎ QUÊN</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label small">Số Tủ phát hiện:</label>
+            <input type="text" id="lfLockerId" class="form-control bg-secondary text-white" placeholder="VD: M-VIP-015 hoặc 015">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Mô tả đồ vật bỏ quên:</label>
+            <textarea id="lfDesc" class="form-control bg-secondary text-white" rows="3" placeholder="VD: 1 ví da màu đen, 1 đồng hồ Apple Watch..."></textarea>
+          </div>
+          <button class="btn btn-warning w-100 fw-bold text-dark" onclick="submitLostFound()">
+            <i class="bi bi-send-fill"></i> Gửi Cảnh Báo Cho Lễ Tân Ngay
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    let html5QrCode = null;
+    let isScanning = false;
+    let offlineQueue = JSON.parse(localStorage.getItem('glms_offline_queue') || '[]');
+
+    // Âm thanh bíp khi quét thành công
+    const audioBeep = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+Z2/S6aRILN5fW9L5uFQ42mNP0wW8ZETWV0vPCbxkRNpTT88JvGRE1lNPyw28ZETWT0/LDbxkRNZTT8sNv');
+
+    async function initScanner() {
+      html5QrCode = new Html5Qrcode("reader");
+      const config = { fps: 15, qrbox: { width: 220, height: 220 } };
+
+      try {
+        await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess);
+      } catch (err) {
+        console.warn("Không mở được camera sau, thử camera mặc định:", err);
+        try {
+          await html5QrCode.start({ facingMode: "user" }, config, onScanSuccess);
+        } catch (e) {
+          document.getElementById('scanResult').className = 'alert alert-danger text-center';
+          document.getElementById('scanResultText').innerText = 'Lỗi Camera: Cần chạy qua HTTPS để cấp quyền camera!';
+          document.getElementById('scanResult').classList.remove('d-none');
+        }
+      }
+    }
+
+    async function onScanSuccess(decodedText) {
+      if (isScanning) return;
+      isScanning = true;
+
+      const resBox = document.getElementById('scanResult');
+      const resText = document.getElementById('scanResultText');
+      resBox.className = 'alert alert-warning text-center py-2';
+      resText.innerText = 'Đang xử lý mã: ' + decodedText;
+      resBox.classList.remove('d-none');
+
+      try {
+        if (!navigator.onLine) {
+          // Lưu vào Offline Queue
+          offlineQueue.push({ token: decodedText, time: new Date().toISOString() });
+          localStorage.setItem('glms_offline_queue', JSON.stringify(offlineQueue));
+          audioBeep.play();
+          resBox.className = 'alert alert-info text-center py-2';
+          resText.innerText = 'Đã lưu hàng đợi ngoại tuyến (sẽ gửi khi có mạng)!';
+        } else {
+          const res = await fetch('/api/lockers/inspect-by-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ qr_token: decodedText, user: 'HK_Mobile' })
+          });
+          const data = await res.json();
+          if (data.success) {
+            audioBeep.play();
+            resBox.className = 'alert alert-success text-center py-2';
+            resText.innerHTML = `<strong>✅ THÀNH CÔNG:</strong> ${data.message}`;
+            loadDirtyLockers();
+          } else {
+            resBox.className = 'alert alert-danger text-center py-2';
+            resText.innerText = data.message;
+          }
+        }
+      } catch (e) {
+        offlineQueue.push({ token: decodedText, time: new Date().toISOString() });
+        localStorage.setItem('glms_offline_queue', JSON.stringify(offlineQueue));
+        resBox.className = 'alert alert-info text-center py-2';
+        resText.innerText = 'Lỗi mạng tạm thời - Đã lưu hàng đợi ngoại tuyến!';
+      }
+
+      // Khóa 1.8 giây tránh quét liên tiếp
+      setTimeout(() => { isScanning = false; }, 1800);
+    }
+
+    // Tải danh sách tủ đang Dirty
+    async function loadDirtyLockers() {
+      try {
+        const res = await fetch('/api/lockers');
+        const lockers = await res.json();
+        const dirty = lockers.filter(l => l.current_status === 'DIRTY');
+        const listDiv = document.getElementById('dirtyLockerList');
+        listDiv.innerHTML = '';
+
+        if (dirty.length === 0) {
+          listDiv.innerHTML = '<span class="text-success small py-2"><i class="bi bi-check-all"></i> Tất cả các tủ đã được dọn sạch!</span>';
+          return;
+        }
+
+        dirty.forEach(l => {
+          const btn = document.createElement('button');
+          btn.className = `btn btn-sm ${l.tier_id === 'VIP' ? 'btn-warning text-dark fw-bold border-white' : 'btn-outline-warning'}`;
+          btn.innerHTML = `${l.tier_id === 'VIP' ? '★ ' : ''}${l.zone_id === 'MEN' ? 'Nam ' : 'Nữ '}${l.locker_number}`;
+          btn.onclick = () => manualInspect(l.locker_id);
+          listDiv.appendChild(btn);
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function manualInspect(l_id) {
+      if (confirm(`Xác nhận đã dọn sạch và reset mật mã tủ ${l_id}?`)) {
+        await fetch('/api/lockers/update-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ locker_id: l_id, new_status: 'INSPECTED', user: 'HK_Manual_List' })
+        });
+        audioBeep.play();
+        loadDirtyLockers();
+      }
+    }
+
+    // Đồng bộ offline queue khi có mạng lại
+    window.addEventListener('online', async () => {
+      document.getElementById('offlineIndicator').classList.add('d-none');
+      if (offlineQueue.length > 0) {
+        for (const item of offlineQueue) {
+          await fetch('/api/lockers/inspect-by-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ qr_token: item.token, user: 'HK_Offline_Sync' })
+          });
+        }
+        offlineQueue = [];
+        localStorage.removeItem('glms_offline_queue');
+        alert('Đã đồng bộ toàn bộ dữ liệu quét ngoại tuyến thành công!');
+        loadDirtyLockers();
+      }
+    });
+
+    window.addEventListener('offline', () => {
+      document.getElementById('offlineIndicator').classList.remove('d-none');
+    });
+
+    // Lost & Found
+    function openLostFoundModal() {
+      new bootstrap.Modal(document.getElementById('hkLostFoundModal')).show();
+    }
+
+    async function submitLostFound() {
+      const l_id = document.getElementById('lfLockerId').value.trim();
+      const desc = document.getElementById('lfDesc').value.trim();
+      if (!l_id || !desc) return alert('Vui lòng nhập đầy đủ số tủ và mô tả đồ vật!');
+
+      await fetch('/api/lost-and-found', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ locker_id: l_id, item_description: desc, found_by: 'HK_Staff' })
+      });
+      alert('Đã gửi thông báo đồ bỏ quên tới quầy Lễ tân thành công!');
+      bootstrap.Modal.getInstance(document.getElementById('hkLostFoundModal')).hide();
+    }
+
+    initScanner();
+    loadDirtyLockers();
+  </script>
+</body>
+</html>

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Báo Cáo KPI & Hiệu Suất Vận Hành Locker</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-light p-3">
+  <div class="container-fluid">
+    
+    <div class="d-flex justify-content-between align-items-center mb-4 bg-white p-3 rounded shadow-sm">
+      <div class="d-flex align-items-center gap-3">
+        <a href="index.html" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Menu</a>
+        <h4 class="mb-0 text-primary fw-bold"><i class="bi bi-graph-up-arrow"></i> BÁO CÁO HIỆU SUẤT VẬN HÀNH LOCKER (KPI DASHBOARD)</h4>
+      </div>
+      <div>
+        <span class="badge bg-success p-2"><i class="bi bi-circle-fill"></i> Dữ liệu Realtime</span>
+      </div>
+    </div>
+
+    <!-- 4 KPI Cards -->
+    <div class="row g-3 mb-4">
+      <div class="col-md-3">
+        <div class="card border-0 shadow-sm bg-primary text-white p-3 rounded-3">
+          <small class="text-white-50 fw-bold">TỔNG TỦ VẬN HÀNH</small>
+          <h2 class="fw-bold mb-0" id="kpiTotal">603</h2>
+          <small class="text-white-50">497 Nam | 106 Nữ</small>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card border-0 shadow-sm bg-success text-white p-3 rounded-3">
+          <small class="text-white-50 fw-bold">TỦ ĐANG SẴN SÀNG (INSPECTED)</small>
+          <h2 class="fw-bold mb-0" id="kpiInspected">0</h2>
+          <small class="text-white-50">Sẵn sàng cấp cho khách</small>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card border-0 shadow-sm bg-danger text-white p-3 rounded-3">
+          <small class="text-white-50 fw-bold">TỦ ĐANG SỬ DỤNG (IN USE)</small>
+          <h2 class="fw-bold mb-0" id="kpiInUse">0</h2>
+          <small class="text-white-50" id="kpiOccupancy">Công suất: 0%</small>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card border-0 shadow-sm bg-warning text-dark p-3 rounded-3">
+          <small class="text-dark-50 fw-bold">TỦ ĐANG CHỜ DỌN (DIRTY)</small>
+          <h2 class="fw-bold mb-0" id="kpiDirty">0</h2>
+          <small class="text-dark-50">Cần Housekeeping xử lý</small>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="row g-4 mb-4">
+      <div class="col-md-6">
+        <div class="card border-0 shadow-sm p-3 rounded-3 h-100 bg-white">
+          <h6 class="fw-bold text-secondary mb-3"><i class="bi bi-pie-chart-fill"></i> TỶ LỆ TRẠNG THÁI TỦ HIỆN TẠI</h6>
+          <div style="height: 280px; position: relative;">
+            <canvas id="statusChart"></canvas>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="card border-0 shadow-sm p-3 rounded-3 h-100 bg-white">
+          <h6 class="fw-bold text-secondary mb-3"><i class="bi bi-bar-chart-line-fill"></i> PHÂN BỔ TỦ THEO PHÂN KHU</h6>
+          <div style="height: 280px; position: relative;">
+            <canvas id="zoneChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let statusChartInstance = null;
+    let zoneChartInstance = null;
+
+    async function loadAnalytics() {
+      const res = await fetch('/api/analytics');
+      const data = await res.json();
+
+      document.getElementById('kpiTotal').innerText = data.total;
+      document.getElementById('kpiInspected').innerText = data.inspected;
+      document.getElementById('kpiInUse').innerText = data.in_use;
+      document.getElementById('kpiDirty').innerText = data.dirty;
+      document.getElementById('kpiOccupancy').innerText = `Công suất: ${data.occupancy_rate}%`;
+
+      renderStatusChart(data);
+      renderZoneChart(data);
+    }
+
+    function renderStatusChart(data) {
+      const ctx = document.getElementById('statusChart').getContext('2d');
+      if (statusChartInstance) statusChartInstance.destroy();
+
+      statusChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Sẵn sàng (Inspected)', 'Đang dùng (In Use)', 'Chờ dọn (Dirty)', 'Giữ cố định', 'Bảo trì (OOO)'],
+          datasets: [{
+            data: [data.inspected, data.in_use, data.dirty, data.reserved, data.ooo],
+            backgroundColor: ['#198754', '#dc3545', '#ffc107', '#6f42c1', '#6c757d']
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+    }
+
+    function renderZoneChart(data) {
+      const ctx = document.getElementById('zoneChart').getContext('2d');
+      if (zoneChartInstance) zoneChartInstance.destroy();
+
+      zoneChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['Khu Nam VIP', 'Khu Nam Member', 'Khu Nữ VIP', 'Khu Nữ Member'],
+          datasets: [{
+            label: 'Số lượng tủ',
+            data: [221, 276, 23, 83],
+            backgroundColor: ['#ffd700', '#0d6efd', '#ffc107', '#d63384']
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+      });
+    }
+
+    loadAnalytics();
+  </script>
+</body>
+</html>

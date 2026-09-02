@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lễ Tân - Ma Trận Giám Sát Locker Realtime</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+  <style>
+    body { background-color: #f0f2f5; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    .locker-box {
+      width: 72px; height: 72px; margin: 4px;
+      display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+      border-radius: 8px; font-weight: 700; font-size: 14px;
+      cursor: pointer; position: relative; transition: all 0.15s ease; user-select: none;
+    }
+    .locker-box:hover { transform: scale(1.08); box-shadow: 0 4px 10px rgba(0,0,0,0.25); z-index: 5; }
+    
+    /* Trạng thái vận hành */
+    .status-INSPECTED { background-color: #198754; color: #fff; } /* Xanh lá: Sẵn sàng */
+    .status-IN_USE { background-color: #dc3545; color: #fff; }    /* Đỏ: Đang dùng */
+    .status-DIRTY { background-color: #ffc107; color: #000; animation: pulse 2s infinite; } /* Vàng: Chờ dọn */
+    .status-RESERVED { background-color: #6f42c1; color: #fff; } /* Tím: Member giữ */
+    .status-OOO { background-color: #6c757d; color: #fff; }      /* Xám: Bảo trì */
+
+    @keyframes pulse { 0% { opacity: 0.8; } 50% { opacity: 1; } 100% { opacity: 0.8; } }
+
+    /* Phân biệt VIP vs Member */
+    .tier-VIP { border: 3px solid #ffd700 !important; box-shadow: 0 0 6px rgba(255, 215, 0, 0.6); }
+    .tier-VIP::after { content: '★ VIP'; position: absolute; top: 2px; font-size: 8.5px; font-weight: 800; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+    .tier-VIP.status-DIRTY::after { color: #000; text-shadow: none; }
+
+    .tier-MEMBER_GUEST { border: 1px solid rgba(0,0,0,0.15); }
+    .tier-MEMBER_GUEST::after { content: 'M&G'; position: absolute; top: 2px; font-size: 8px; opacity: 0.8; }
+
+    .zone-section { background: #fff; border-radius: 12px; padding: 18px; margin-bottom: 20px; border: 1px solid #dee2e6; }
+    .zone-title { font-weight: 700; font-size: 16px; padding-bottom: 10px; margin-bottom: 12px; border-bottom: 2px solid #e9ecef; display: flex; justify-content: space-between; align-items: center; }
+  </style>
+</head>
+<body class="p-3">
+  <div class="container-fluid">
+    
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-3 bg-white p-3 rounded-3 shadow-sm">
+      <div class="d-flex align-items-center gap-3">
+        <a href="index.html" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Menu</a>
+        <div>
+          <h4 class="mb-0 text-primary fw-bold"><i class="bi bi-grid-3x3-gap-fill"></i> SƠ ĐỒ LOCKER REALTIME (LỄ TÂN)</h4>
+          <small class="text-muted">Tổng quản lý: 603 tủ | Tự động đồng bộ Realtime</small>
+        </div>
+      </div>
+
+      <!-- Legend & Lost/Found alert -->
+      <div class="d-flex align-items-center gap-2">
+        <button id="lostFoundBtn" class="btn btn-danger btn-sm position-relative d-none" onclick="openLostFoundModal()">
+          <i class="bi bi-bell-fill"></i> ĐỒ BỎ QUÊN
+          <span id="lfBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-warning text-dark">0</span>
+        </button>
+        <span class="badge status-INSPECTED p-2"><i class="bi bi-check-circle"></i> Sẵn sàng (Inspected)</span>
+        <span class="badge status-IN_USE p-2"><i class="bi bi-person-fill"></i> Đang dùng</span>
+        <span class="badge status-DIRTY p-2"><i class="bi bi-hourglass-split"></i> Chờ dọn (Dirty)</span>
+        <span class="badge status-RESERVED p-2"><i class="bi bi-lock-fill"></i> Giữ cố định</span>
+      </div>
+    </div>
+
+    <!-- 2 Tab Chính: KHU NAM & KHU NỮ -->
+    <ul class="nav nav-pills nav-fill mb-3 bg-white p-2 rounded-3 shadow-sm" id="genderTabs">
+      <li class="nav-item">
+        <button class="nav-link active fs-5 fw-bold" data-gender="MEN">
+          <i class="bi bi-gender-male text-primary"></i> KHU NAM (497 TỦ)
+          <span class="badge bg-success ms-2" id="men-ready-count">0 Sẵn sàng</span>
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link fs-5 fw-bold" data-gender="WOMEN">
+          <i class="bi bi-gender-female text-danger"></i> KHU NỮ (106 TỦ)
+          <span class="badge bg-success ms-2" id="women-ready-count">0 Sẵn sàng</span>
+        </button>
+      </li>
+    </ul>
+
+    <!-- Filter & Search Bar -->
+    <div class="d-flex justify-content-between align-items-center mb-3 bg-white p-2 rounded-3 border">
+      <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-dark filter-btn active" onclick="setFilter('ALL')">Tất cả</button>
+        <button class="btn btn-sm btn-outline-warning text-dark fw-bold filter-btn" onclick="setFilter('VIP')">★ Chỉ xem VIP</button>
+        <button class="btn btn-sm btn-outline-secondary fw-bold filter-btn" onclick="setFilter('MEMBER_GUEST')">Chỉ xem Member & Guest</button>
+        <button class="btn btn-sm btn-outline-success filter-btn" onclick="setFilter('INSPECTED')">Chỉ tủ Sẵn sàng</button>
+        <button class="btn btn-sm btn-outline-danger filter-btn" onclick="setFilter('IN_USE')">Chỉ tủ Đang dùng</button>
+      </div>
+      <div class="input-group input-group-sm" style="max-width: 250px;">
+        <span class="input-group-text"><i class="bi bi-search"></i></span>
+        <input type="text" id="searchLocker" class="form-control" placeholder="Tìm nhanh số tủ..." oninput="renderLockers()">
+      </div>
+    </div>
+
+    <!-- Locker Container -->
+    <div id="locker-container">
+      <!-- Cụm VIP -->
+      <div class="zone-section" id="vip-section">
+        <div class="zone-title text-warning text-dark">
+          <span><i class="bi bi-star-fill text-warning"></i> PHÂN KHU VIP (<span id="vip-count">0</span> TỦ)</span>
+          <span class="badge bg-light text-dark border" id="vip-available">Trống: 0</span>
+        </div>
+        <div id="vip-grid" class="d-flex flex-wrap"></div>
+      </div>
+
+      <!-- Cụm Member & Guest -->
+      <div class="zone-section" id="mem-section">
+        <div class="zone-title text-secondary">
+          <span><i class="bi bi-people-fill text-primary"></i> PHÂN KHU MEMBER & GUEST (<span id="mem-count">0</span> TỦ)</span>
+          <span class="badge bg-light text-dark border" id="mem-available">Trống: 0</span>
+        </div>
+        <div id="mem-grid" class="d-flex flex-wrap"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MODAL THAO TÁC TỦ -->
+  <div class="modal fade" id="lockerActionModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title fw-bold" id="actionModalTitle">Tủ #001</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div id="actionModalContent"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL ĐỒ BỎ QUÊN -->
+  <div class="modal fade" id="lostFoundModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header bg-danger text-white">
+          <h5 class="modal-title fw-bold"><i class="bi bi-bell-fill"></i> DANH SÁCH ĐỒ KHÁCH BỎ QUÊN TẠI TỦ</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="table-responsive">
+            <table class="table table-bordered table-hover align-middle">
+              <thead class="table-light">
+                <tr><th>Số Tủ</th><th>Mô tả đồ vật</th><th>Người tìm thấy</th><th>Thời gian</th><th>Thao tác</th></tr>
+              </thead>
+              <tbody id="lostFoundTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    let allLockers = [];
+    let currentGender = 'MEN';
+    let currentFilter = 'ALL';
+    let activeLocker = null;
+
+    async function loadData() {
+      const res = await fetch('/api/lockers');
+      allLockers = await res.json();
+      renderLockers();
+      checkLostAndFound();
+    }
+
+    function renderLockers() {
+      const vipGrid = document.getElementById('vip-grid');
+      const memGrid = document.getElementById('mem-grid');
+      vipGrid.innerHTML = '';
+      memGrid.innerHTML = '';
+
+      const query = document.getElementById('searchLocker').value.trim();
+      let list = allLockers.filter(l => l.zone_id === currentGender);
+
+      if (query) {
+        list = list.filter(l => l.locker_number.includes(query) || l.locker_id.toLowerCase().includes(query.toLowerCase()));
+      }
+
+      // Filter
+      if (currentFilter === 'VIP') list = list.filter(l => l.tier_id === 'VIP');
+      else if (currentFilter === 'MEMBER_GUEST') list = list.filter(l => l.tier_id === 'MEMBER_GUEST');
+      else if (currentFilter === 'INSPECTED') list = list.filter(l => l.current_status === 'INSPECTED');
+      else if (currentFilter === 'IN_USE') list = list.filter(l => l.current_status === 'IN_USE');
+
+      const vips = list.filter(l => l.tier_id === 'VIP');
+      const mems = list.filter(l => l.tier_id === 'MEMBER_GUEST');
+
+      // Update counters
+      const menReady = allLockers.filter(l => l.zone_id === 'MEN' && l.current_status === 'INSPECTED').length;
+      const womenReady = allLockers.filter(l => l.zone_id === 'WOMEN' && l.current_status === 'INSPECTED').length;
+      document.getElementById('men-ready-count').innerText = `${menReady} Sẵn sàng`;
+      document.getElementById('women-ready-count').innerText = `${womenReady} Sẵn sàng`;
+
+      document.getElementById('vip-count').innerText = vips.length;
+      document.getElementById('mem-count').innerText = mems.length;
+      document.getElementById('vip-available').innerText = `Trống: ${vips.filter(l => l.current_status === 'INSPECTED').length}`;
+      document.getElementById('mem-available').innerText = `Trống: ${mems.filter(l => l.current_status === 'INSPECTED').length}`;
+
+      vips.forEach(l => vipGrid.appendChild(createLockerElement(l)));
+      mems.forEach(l => memGrid.appendChild(createLockerElement(l)));
+    }
+
+    function createLockerElement(l) {
+      const div = document.createElement('div');
+      div.id = `locker-${l.locker_id}`;
+      div.className = `locker-box status-${l.current_status} tier-${l.tier_id}`;
+      div.innerHTML = `<span class="mt-2">${l.locker_number}</span>`;
+      div.onclick = () => openActionModal(l);
+      return div;
+    }
+
+    function openActionModal(l) {
+      activeLocker = l;
+      const modal = new bootstrap.Modal(document.getElementById('lockerActionModal'));
+      document.getElementById('actionModalTitle').innerText = `TỦ SỐ: ${l.locker_number} (${l.tier_id === 'VIP' ? 'Hạng VIP' : 'Member & Guest'})`;
+
+      let html = `
+        <div class="mb-3">
+          <p><strong>Khu vực:</strong> ${l.zone_id === 'MEN' ? 'Nam' : 'Nữ'} | <strong>Trạng thái:</strong> <span class="badge status-${l.current_status} p-2">${l.current_status}</span></p>
+          ${l.guest_name ? `<p><strong>Khách đang dùng:</strong> ${l.guest_name}</p>` : ''}
+        </div>
+      `;
+
+      if (l.current_status === 'INSPECTED') {
+        html += `
+          <div class="mb-3">
+            <label class="form-label fw-bold">Gán Khách Sử Dụng (Check-in):</label>
+            <input type="text" id="guestInput" class="form-control" placeholder="Nhập tên khách / Mã Golfer...">
+          </div>
+          <button class="btn btn-success w-100 fw-bold" onclick="submitCheckin('${l.locker_id}')"><i class="bi bi-person-check-fill"></i> Xác Nhận Check-in Gán Tủ</button>
+        `;
+      } else if (l.current_status === 'IN_USE') {
+        html += `
+          <button class="btn btn-warning w-100 fw-bold mb-2 text-dark" onclick="submitCheckout('${l.locker_id}')"><i class="bi bi-arrow-return-left"></i> Khách Trả Tủ (Chuyển Dirty cho HK dọn)</button>
+          <button class="btn btn-outline-primary w-100" onclick="showTransferUI('${l.locker_id}')"><i class="bi bi-arrow-left-right"></i> Đổi Tủ Khác Cho Khách</button>
+        `;
+      } else if (l.current_status === 'DIRTY') {
+        html += `
+          <div class="alert alert-warning">Tủ đang ở trạng thái <strong>Chờ dọn dẹp</strong>. Vui lòng đợi Housekeeping dọn và quét QR xác nhận sạch.</div>
+          <button class="btn btn-outline-success w-100 btn-sm" onclick="forceInspect('${l.locker_id}')">Lễ tân xác nhận đã dọn thủ công</button>
+        `;
+      } else {
+        html += `<button class="btn btn-success w-100" onclick="forceInspect('${l.locker_id}')">Mở khóa / Đưa về Sẵn sàng</button>`;
+      }
+
+      document.getElementById('actionModalContent').innerHTML = html;
+      modal.show();
+    }
+
+    async function submitCheckin(l_id) {
+      const guest = document.getElementById('guestInput').value.trim() || 'Khách Chơi Golf';
+      await fetch('/api/lockers/update-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ locker_id: l_id, new_status: 'IN_USE', guest_name: guest, user: 'FO_Desk' })
+      });
+      bootstrap.Modal.getInstance(document.getElementById('lockerActionModal')).hide();
+    }
+
+    async function submitCheckout(l_id) {
+      await fetch('/api/lockers/update-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ locker_id: l_id, new_status: 'DIRTY', user: 'FO_Desk' })
+      });
+      bootstrap.Modal.getInstance(document.getElementById('lockerActionModal')).hide();
+    }
+
+    async function forceInspect(l_id) {
+      await fetch('/api/lockers/update-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ locker_id: l_id, new_status: 'INSPECTED', user: 'FO_Manual' })
+      });
+      bootstrap.Modal.getInstance(document.getElementById('lockerActionModal')).hide();
+    }
+
+    // Lost and Found check
+    async function checkLostAndFound() {
+      const res = await fetch('/api/lost-and-found');
+      const items = await res.json();
+      const pending = items.filter(i => i.status === 'PENDING');
+      const btn = document.getElementById('lostFoundBtn');
+      const badge = document.getElementById('lfBadge');
+
+      if (pending.length > 0) {
+        btn.classList.remove('d-none');
+        badge.innerText = pending.length;
+      } else {
+        btn.classList.add('d-none');
+      }
+    }
+
+    async function openLostFoundModal() {
+      const res = await fetch('/api/lost-and-found');
+      const items = await res.json();
+      const pending = items.filter(i => i.status === 'PENDING');
+      const tbody = document.getElementById('lostFoundTableBody');
+      tbody.innerHTML = '';
+
+      pending.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="fw-bold text-danger">${item.locker_id}</td>
+          <td>${item.description}</td>
+          <td>${item.found_by}</td>
+          <td>${new Date(item.created_at).toLocaleTimeString()}</td>
+          <td><button class="btn btn-sm btn-success" onclick="returnLostItem(${item.item_id})">Xác nhận đã trả khách</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+      new bootstrap.Modal(document.getElementById('lostFoundModal')).show();
+    }
+
+    async function returnLostItem(id) {
+      await fetch('/api/lost-and-found/return', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_id: id, user: 'FO_Desk' })
+      });
+      bootstrap.Modal.getInstance(document.getElementById('lostFoundModal')).hide();
+      checkLostAndFound();
+    }
+
+    // Realtime SSE Connection
+    const evtSource = new EventSource('/api/events');
+    evtSource.addEventListener('locker_updated', (e) => {
+      const data = JSON.parse(e.data);
+      const l = allLockers.find(x => x.locker_id === data.locker_id);
+      if (l) {
+        l.current_status = data.new_status;
+        if (data.guest_name !== undefined) l.guest_name = data.guest_name;
+        renderLockers();
+      }
+    });
+
+    evtSource.addEventListener('lost_found_reported', (e) => {
+      checkLostAndFound();
+      alert('🔔 CẢNH BÁO: Housekeeping vừa phát hiện đồ khách bỏ quên tại khu Locker!');
+    });
+
+    // Tab switcher
+    document.querySelectorAll('#genderTabs button').forEach(btn => {
+      btn.onclick = (e) => {
+        document.querySelector('#genderTabs button.active').classList.remove('active');
+        e.currentTarget.classList.add('active');
+        currentGender = e.currentTarget.getAttribute('data-gender');
+        renderLockers();
+      };
+    });
+
+    function setFilter(f) {
+      currentFilter = f;
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active', 'btn-dark'));
+      event.target.classList.add('active', 'btn-dark');
+      renderLockers();
+    }
+
+    loadData();
+  </script>
+</body>
+</html>
